@@ -95,6 +95,25 @@ python3 scripts/create_page.py \
 
 `--html-file` can supply a reviewed plain HTML fragment instead of the placeholder, but is optional and not used in the normal first-page setup.
 
+## Confirmed Interact page destination
+
+The one-time page creation request returned:
+
+```json
+{"ContentId":2194,"VersionId":2042,"Acknowledged":true}
+```
+
+**Policies destination ContentId: 2194**. This is distinct from **Property Details: 2186**.
+The deployment-specific configuration is recorded in `config/interact_target.json`.
+Verify in Interact that content 2194 is the new pure-HTML Policy Library page before
+enabling updates; the creation response acknowledges success but does not itself
+prove the latest-page retrieval contract.
+
+The policy composer does not currently implement page updates or automated
+publishing. A future publisher must validate its target against the Policies-only
+configuration, reject page 2186, verify the rendered manifest, and require
+explicit authorization.
+
 ## Safety and follow-up phases
 
 - Current output is a **standalone local preview** containing embedded CSS/JS. Before Interact publishing, move assets into `birchstone-interact-customization/policies/` and generate an Interact-compatible fragment.
