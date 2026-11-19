@@ -29,7 +29,7 @@ class PublishGuardTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.out = Path(self.tmp.name)
         self.html = '<div data-policies-page="true">' + (
-            '<article data-policy-record="true"></article>' * 415
+            '<a data-policy-record="true" href="https://performancehq.gracehill.com/" target="_blank"></a>' * 415
         ) + '</div>'
         self.manifest = {
             "source": "go-notion", "policy_count": 415,
