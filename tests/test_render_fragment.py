@@ -48,8 +48,11 @@ class RenderSafetyTests(unittest.TestCase):
         self.assertIn("get('id')==='2194'", fragment)
         self.assertIn("function hideNativePreviewMessage(root)", fragment)
         self.assertIn("function closePageDetailsPane()", fragment)
-        self.assertIn("function hideDetailsPaneFallback(root)", fragment)
-        self.assertIn("if(details)hideDetailsPaneFallback(root)", fragment)
+        self.assertIn("window.location.pathname.toLowerCase().endsWith('/interact/pages/content/document.aspx')", fragment)
+        self.assertIn("get('id')==='2194'", fragment)
+        self.assertIn("if(attempts<20)", fragment)
+        self.assertIn("window.setTimeout(tryCloseDetails,250)", fragment)
+        self.assertIn("window.setTimeout(applyWidth,450)", fragment)
         self.assertIn("body_btnBEPreview", fragment)
         self.assertNotIn("btnPrint", fragment)
         self.assertNotIn("body_btnPDF", fragment)
@@ -85,6 +88,17 @@ class RenderSafetyTests(unittest.TestCase):
         self.assertIn("transform:translateX(3px)", fragment)
         self.assertIn(".policies-record:focus-visible", fragment)
         self.assertIn("prefers-reduced-motion:reduce", fragment)
+
+    def test_policies_path_gate_matches_real_interact_url(self):
+        # The previous JS regex was double-escaped in Python's triple-quoted
+        # string, preventing every page-specific enhancement from executing.
+        from policies_composer.render import SCRIPT
+        self.assertIn(
+            "window.location.pathname.toLowerCase().endsWith('/interact/pages/content/document.aspx')",
+            SCRIPT,
+        )
+        self.assertIn("get('id')==='2194'", SCRIPT)
+        self.assertNotIn("return /\\\\/Interact", SCRIPT)
 
     def test_empty_directory_refused(self):
         with self.assertRaises(ValueError):
