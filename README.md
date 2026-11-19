@@ -170,3 +170,47 @@ are disabled. It does not modify Property Details page 2186 and does not
 register any Portal automation. The `publishing_enabled: false` configuration
 continues to indicate that **automatic publishing is disabled**; a manual,
 explicitly confirmed update is the only path.
+
+## Workplace Search connector 2 (one-policy testing only)
+
+Interact custom connector **Birchstone Policies** has application ID **2**
+(`/InteractV7/SearchApp/Edit/2`). It is independent of the HTML Page Composer
+destination `2194`.
+
+The new API requires `X-ApiKey` (the custom connector's secret) and
+`X-Tenant` (the existing tenant GUID); it does **not** reuse the Page Composer
+API key/secret. Store `POLICIES_SEARCH_SECRET_KEY` securely in
+`secrets/.env`. Do not `source` this file or commit it.
+
+First run the offline, **no-network** single-policy preview:
+
+```bash
+python scripts/search_connector_test.py
+```
+
+The default test selects Emergency Eyewash / 5067 from the validated
+415-record Go snapshot. It emits a preview of the target URL, stable ID, and
+proposed permissions, but performs **no upload**.
+
+**Security gate:** Connector search records are not protected by the
+admin-only permissions of Interact page 2194. Before any write, confirm that
+the intended Interact test user has the specific external identity and verify
+how this tenant maps the identity. The script refuses writes without an
+explicit identity and matching connector confirmation.
+
+Only after that validation, one authorized record may be tested using:
+
+```bash
+python scripts/search_connector_test.py \\
+  --external-identity CONFIRMED_IDENTITY \\
+  --write --confirm-connector 2
+```
+
+This performs one `PUT /api/search/connector/2/docs/addupdate` with
+`IsPublic:false`, one `ExternalIdentities` value, and a stable
+`GloballyUniqueId` derived from the Notion page ID. It checks the API
+acknowledgement and refuses partial-error responses. No bulk upload, delete,
+sync session, or user sync is implemented. Those require a separately approved
+rollout plan and visibility test.
+
+Official reference: https://developer.interactsoftware.com/custom-connectors-api
