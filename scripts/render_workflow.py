@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from policies_composer.models import Policy
 from policies_composer.transform import normalize_page
-from policies_composer.render import render_directory
+from policies_composer.render import render_directory, render_preview_document
 from policies_composer.validate import validate_policies
 
 
@@ -75,7 +75,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     # Validation completes before any output is replaced.
     (args.output_dir / "policies.fragment.html").write_text(html, encoding="utf-8")
-    (args.output_dir / "policies.preview.html").write_text(html, encoding="utf-8")
+    (args.output_dir / "policies.preview.html").write_text(render_preview_document(html), encoding="utf-8")
     (args.output_dir / "render_manifest.json").write_text(json.dumps({
         "created_at": timestamp, "policy_count": len(policies),
         "sha256": digest, "source": source_label,

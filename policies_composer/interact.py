@@ -123,6 +123,34 @@ class InteractClient:
         self._token = token
         return token
 
+    def get_page(self, page_id: int) -> dict[str, Any]:
+        """Read latest Page Composer metadata without changing the page."""
+        if page_id != 2194:
+            raise InteractError("Read-only verification only supports Policies page 2194.")
+        token = self._token or self.authenticate()
+        try:
+            response = self.session.get(
+                f"{self.api_domain}/api/page/{page_id}/composer/latest",
+                headers={
+                    "X-Tenant": self.tenant_guid,
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            raise InteractError(f"Interact page lookup returned HTTP {status}.") from None
+        except requests.RequestException:
+            raise InteractError("Interact page lookup failed to connect.") from None
+        except ValueError:
+            raise InteractError("Interact page lookup returned invalid JSON.") from None
+        if not isinstance(result, dict):
+            raise InteractError("Interact page lookup returned a non-object JSON response.")
+        return result
+
     def create_html_page(self, payload: dict[str, Any]) -> dict[str, Any]:
         token = self._token or self.authenticate()
         try:

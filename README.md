@@ -17,8 +17,8 @@ data/policies.json             (gitignored normalized snapshot)
     ↓
 Python: scripts/render_workflow.py
     ├── validate required fields, links, duplicates and minimum count
-    ├── output/policies.preview.html
-    ├── output/policies.fragment.html
+    ├── output/policies.preview.html (standalone preview)
+    ├── output/policies.fragment.html (scoped Interact HTML)
     └── output/render_manifest.json
 ```
 
@@ -113,6 +113,36 @@ The policy composer does not currently implement page updates or automated
 publishing. A future publisher must validate its target against the Policies-only
 configuration, reject page 2186, verify the rendered manifest, and require
 explicit authorization.
+
+## Verify the newly created Interact target (read-only)
+
+After creating content 2194, first verify Interact's latest composer metadata
+without creating or modifying a page:
+
+```bash
+cd ~/policies-page-composer
+# Run with the shared Python venv. Load credentials using python-dotenv's
+# dotenv_values() or load_dotenv(..., override=True), NOT `source`:
+python3 scripts/verify_interact_page.py
+```
+
+This script reads `config/interact_target.json`, authenticates, and performs
+`GET /api/page/2194/composer/latest`. It checks that the returned content ID,
+title, content type, and Block Editor flag match the expected Policies-only
+destination. If the API omits an identifying field, verification fails closed
+until we inspect the tenant's actual metadata format.
+
+**Credential caution:** Shell sourcing the existing unquoted
+`Property-Details-Page-Composer/secrets/.env` can alter the API secret. Use
+`python-dotenv` to load the five Interact credentials from that file, with
+`override=True`, from the same Python process that runs the script.
+
+## Fragment vs preview
+
+The local preview is a complete HTML document; the Interact fragment is an
+HTML snippet with a single `data-policies-page` container, scoped styles and
+scoped JavaScript. It does not style the Interact document globally. Rendering
+does **not** update page 2194 and a publish command does not yet exist.
 
 ## Safety and follow-up phases
 
