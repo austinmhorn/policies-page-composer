@@ -1,19 +1,18 @@
-"""Minimal Interact page-creation client following Property Details Composer's API contract.
+"""Interact client modeled on the working Property Details Composer requests client.
 
-Creation is a separate operator action. Rendering and scheduling never call this.
+This module handles one-time page creation only. It does not update existing pages.
 """
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from typing import Any
+
+import requests
 
 
 class InteractError(RuntimeError):
-    """Safe operational error; never includes API keys or secrets."""
+    """Operational error that does not echo credentials or response bodies."""
 
 
 def required_env(name: str) -> str:
@@ -26,7 +25,7 @@ def required_env(name: str) -> str:
 def page_payload(*, title: str, summary: str, html: str,
                  category_ids: list[int], top_section_ids: list[int],
                  person_id: int, keywords: list[str] | None = None) -> dict:
-    """Build the same pure-HTML composer payload as Property Details Composer."""
+    """Build a pure-HTML Interact composer payload."""
     if not title.strip() or not html.strip():
         raise ValueError("Title and HTML content must not be blank.")
     if not category_ids or not top_section_ids:
@@ -78,64 +77,75 @@ def page_payload(*, title: str, summary: str, html: str,
 
 class InteractClient:
     def __init__(self) -> None:
-        self.domain = required_env("INTERACT_API_DOMAIN").rstrip("/")
-        if not self.domain.startswith("https://"):
+        self.api_domain = required_env("INTERACT_API_DOMAIN").rstrip("/")
+        if not self.api_domain.startswith("https://"):
             raise InteractError("INTERACT_API_DOMAIN must use HTTPS.")
-        self.tenant = required_env("INTERACT_TENANT_GUID")
-        self.key = required_env("INTERACT_API_KEY")
-        self.secret = required_env("INTERACT_API_SECRET")
+        self.tenant_guid = required_env("INTERACT_TENANT_GUID")
+        self.api_key = required_env("INTERACT_API_KEY")
+        self.api_secret = required_env("INTERACT_API_SECRET")
         try:
             self.person_id = int(required_env("INTERACT_PERSON_ID"))
         except ValueError as exc:
             raise InteractError("INTERACT_PERSON_ID must be an integer.") from exc
         if self.person_id <= 0:
             raise InteractError("INTERACT_PERSON_ID must be positive.")
-
-    def _send(self, request: Request) -> dict:
-        try:
-            with urlopen(request, timeout=30) as response:
-                data = json.load(response)
-        except HTTPError as exc:
-            raise InteractError(f"Interact returned HTTP {exc.code}.") from exc
-        except (URLError, TimeoutError, OSError) as exc:
-            raise InteractError("Could not connect to Interact.") from exc
-        except (ValueError, UnicodeError) as exc:
-            raise InteractError("Interact returned an invalid JSON response.") from exc
-        if not isinstance(data, dict):
-            raise InteractError("Interact returned a non-object JSON response.")
-        return data
+        self.session = requests.Session()
+        self._token: str | None = None
 
     def authenticate(self) -> str:
-        form = urlencode({
-            "grant_type": "authorization_code",
-            "code": f"{self.key}__{self.secret}",
-            "context": "KeySecret",
-        }).encode("utf-8")
-        request = Request(
-            f"{self.domain}/token?{urlencode({'personid': self.person_id})}",
-            data=form,
-            headers={
-                "X-Tenant": self.tenant,
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            method="POST",
-        )
-        token = self._send(request).get("access_token")
+        # Mirror Property Details Composer's working token request exactly.
+        try:
+            response = self.session.post(
+                f"{self.api_domain}/token",
+                params={"personid": self.person_id},
+                headers={
+                    "X-Tenant": self.tenant_guid,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={
+                    "grant_type": "authorization_code",
+                    "code": f"{self.api_key}__{self.api_secret}",
+                    "context": "KeySecret",
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            token = response.json().get("access_token")
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            raise InteractError(f"Interact token request returned HTTP {status}.") from None
+        except requests.RequestException:
+            raise InteractError("Interact token request failed to connect.") from None
+        except (ValueError, AttributeError):
+            raise InteractError("Interact token response was not valid JSON.") from None
         if not isinstance(token, str) or not token:
-            raise InteractError("Interact token response was missing access_token.")
+            raise InteractError("Interact token response did not include access_token.")
+        self._token = token
         return token
 
-    def create_html_page(self, payload: dict) -> dict:
-        token = self.authenticate()
-        request = Request(
-            f"{self.domain}/api/page/composer",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "X-Tenant": self.tenant,
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        return self._send(request)
+    def create_html_page(self, payload: dict[str, Any]) -> dict[str, Any]:
+        token = self._token or self.authenticate()
+        try:
+            response = self.session.post(
+                f"{self.api_domain}/api/page/composer",
+                headers={
+                    "X-Tenant": self.tenant_guid,
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            raise InteractError(f"Interact page creation returned HTTP {status}.") from None
+        except requests.RequestException:
+            raise InteractError("Interact page creation request failed to connect.") from None
+        except ValueError:
+            raise InteractError("Interact page creation returned invalid JSON.") from None
+        if not isinstance(result, dict):
+            raise InteractError("Interact page creation returned a non-object JSON response.")
+        return result

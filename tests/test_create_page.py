@@ -1,9 +1,10 @@
 import os
 import unittest
-from unittest.mock import patch
-from urllib.parse import parse_qs
+from unittest.mock import Mock, patch
 
-from policies_composer.interact import page_payload, InteractClient
+import requests
+
+from policies_composer.interact import page_payload, InteractClient, InteractError
 from scripts.create_page import main, initial_html, parse_ids
 
 
@@ -58,7 +59,7 @@ class CreatePageTests(unittest.TestCase):
         with self.assertRaises(ArgumentTypeError):
             parse_ids("123,abc")
 
-    def test_real_client_authenticates_before_create(self):
+    def make_client(self):
         env = {
             "INTERACT_API_DOMAIN": "https://interact.example.test",
             "INTERACT_TENANT_GUID": "tenant",
@@ -67,21 +68,47 @@ class CreatePageTests(unittest.TestCase):
             "INTERACT_PERSON_ID": "42",
         }
         with patch.dict(os.environ, env):
-            client = InteractClient()
-        with patch.object(client, "_send", side_effect=[
-            {"access_token": "token"}, {"Id": 9999}
-        ]) as sender:
-            result = client.create_html_page({"Page": {"Title": "Policies"}})
-            self.assertEqual(result["Id"], 9999)
-            self.assertEqual(sender.call_count, 2)
-            token_request = sender.call_args_list[0].args[0]
-            create_request = sender.call_args_list[1].args[0]
-            self.assertEqual(token_request.full_url,
-                             "https://interact.example.test/token?personid=42")
-            self.assertEqual(create_request.get_method(), "POST")
-            self.assertEqual(create_request.full_url,
-                             "https://interact.example.test/api/page/composer")
-            self.assertEqual(create_request.get_header("Authorization"), "Bearer token")
+            return InteractClient()
+
+    def test_requests_auth_matches_property_composer(self):
+        client = self.make_client()
+        response = Mock()
+        response.json.return_value = {"access_token": "token"}
+        client.session.post = Mock(return_value=response)
+        self.assertEqual(client.authenticate(), "token")
+        args, kwargs = client.session.post.call_args
+        self.assertEqual(args[0], "https://interact.example.test/token")
+        self.assertEqual(kwargs["params"], {"personid": 42})
+        self.assertEqual(kwargs["data"], {
+            "grant_type": "authorization_code",
+            "code": "key__secret",
+            "context": "KeySecret",
+        })
+        self.assertEqual(kwargs["headers"]["X-Tenant"], "tenant")
+
+    def test_create_uses_requests_and_bearer_token(self):
+        client = self.make_client()
+        response1 = Mock()
+        response1.json.return_value = {"access_token": "token"}
+        response2 = Mock()
+        response2.json.return_value = {"Id": 9999}
+        client.session.post = Mock(side_effect=[response1, response2])
+        self.assertEqual(client.create_html_page({"Page": {"Title": "Policies"}}), {"Id": 9999})
+        self.assertEqual(client.session.post.call_count, 2)
+        args, kwargs = client.session.post.call_args
+        self.assertEqual(args[0], "https://interact.example.test/api/page/composer")
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer token")
+        self.assertEqual(kwargs["json"]["Page"]["Title"], "Policies")
+
+    def test_auth_http_error_does_not_leak_response(self):
+        client = self.make_client()
+        response = requests.Response()
+        response.status_code = 400
+        response._content = b'{"error":"sensitive server response"}'
+        client.session.post = Mock(return_value=response)
+        with self.assertRaisesRegex(InteractError, "HTTP 400") as captured:
+            client.authenticate()
+        self.assertNotIn("sensitive", str(captured.exception))
 
 
 if __name__ == "__main__":
