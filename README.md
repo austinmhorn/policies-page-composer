@@ -26,7 +26,7 @@ The original PDE `notionapi/notionapi.go` was used as a design reference (pagina
 
 ## Setup
 
-Go 1.23+ and Python 3.10+ are required. Install Python dependencies with `python -m pip install -r requirements.txt` (or use the existing shared engines venv, which contains `requests` and `python-dotenv`).
+Go 1.22+ and Python 3.10+ are required. Install Python dependencies with `python -m pip install -r requirements.txt` (or use the existing shared engines venv, which contains `requests` and `python-dotenv`).
 
 Give the Notion integration read access to DB.Policies. Store `NOTION_TOKEN` and **exactly one** of `NOTION_DATA_SOURCE_ID` (current Notion API) or `NOTION_DATABASE_ID` (legacy API) in `secrets/.env`. The Interact and render scripts automatically load this file using `python-dotenv` with `override=True`, so special characters in credentials are preserved even if a shell was previously sourced incorrectly.
 
