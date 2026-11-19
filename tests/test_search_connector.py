@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from policies_composer.models import Policy
 from policies_composer.search_connector import (
     API_PATH, CONNECTOR_APP_ID, TEST_EMAIL, TEST_IDENTITY, TEST_USER_GID,
-    USER_API_PATH, document_for_policy, upload_one, user_record_for_test, sync_test_user, get_document_state,
+    USER_API_PATH, document_for_policy, upload_one, user_record_for_test, sync_test_user, get_document_state, _safe_error_diagnostic,
 )
 from scripts.sync_test_identity import main as user_sync_main
 from scripts.search_connector_test import main
@@ -102,6 +102,27 @@ class ConnectorTests(unittest.TestCase):
         }), patch("policies_composer.search_connector.requests.put", return_value=response):
             with self.assertRaisesRegex(RuntimeError, "did not acknowledge"):
                 upload_one(doc)
+
+    def test_http_500_diagnostics_never_expose_server_body_or_credentials(self):
+        response = Mock()
+        response.status_code = 500
+        response.headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "X-Request-ID": "safe-request-123",
+        }
+        response.content = b'{"Message":"Sensitive details: API_SECRET DO_NOT_SHARE"}'
+        response.json.return_value = {
+            "Message": "Sensitive details: API_SECRET DO_NOT_SHARE",
+            "Errors": [{
+                "Errors": [{"ErrorCode": 4, "ErrorMessage": "API_SECRET DO_NOT_SHARE"}]
+            }],
+        }
+        diagnostic = _safe_error_diagnostic(response)
+        self.assertEqual(diagnostic["http_status"], 500)
+        self.assertEqual(diagnostic["error_codes"], [4])
+        self.assertEqual(diagnostic["x-request-id"], "safe-request-123")
+        self.assertNotIn("API_SECRET", str(diagnostic))
+        self.assertNotIn("DO_NOT_SHARE", str(diagnostic))
 
     def test_user_record_is_allowlisted_and_explicit(self):
         record = user_record_for_test()
