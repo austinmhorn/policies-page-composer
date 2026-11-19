@@ -112,7 +112,7 @@ SCRIPT = """
   /* Based on birchstone-interact-customization's Property Details Interact helpers.
      Only run page-chrome adjustments on the Policies document page, ID 2194. */
   function isPoliciesDocumentPage(){
-    return /\\/Interact\\/Pages\\/Content\\/Document\\.aspx$/i.test(window.location.pathname) &&
+    return window.location.pathname.toLowerCase().endsWith('/interact/pages/content/document.aspx') &&
       new URLSearchParams(window.location.search).get('id')==='2194';
   }
 
@@ -135,46 +135,37 @@ SCRIPT = """
     }
   }
 
+  /* Replicates closePageDetailsPane() in birchstone-interact-customization's
+     property_details/property-details.js for Interact page 2186. */
   function closePageDetailsPane(){
-    const direct=[...document.querySelectorAll(
-      '[title*="Hide page details" i], [aria-label*="Hide page details" i], [data-original-title*="Hide page details" i]'
-    )].filter(el=>el.getBoundingClientRect().width>0);
-    if(direct.length){direct[0].click();return true;}
-    const heading=[...document.querySelectorAll('body *')].find(
-      el=>!el.children.length&&(el.textContent||'').trim().toLowerCase()==='details'
-    );
-    if(!heading)return false;
-    const rect=heading.getBoundingClientRect();
-    const candidates=[...document.querySelectorAll('button, a, [role="button"]')].filter(el=>{
-      const b=el.getBoundingClientRect();
-      return b.width>0&&b.height>0&&b.top>=55&&b.top<=190&&
-        b.left>=rect.left&&b.width<=80&&b.height<=80;
+    const directCandidates=[
+      ...document.querySelectorAll(
+        '[title*="Hide page details" i], [aria-label*="Hide page details" i], [data-original-title*="Hide page details" i]'
+      ),
+    ];
+    if(directCandidates.length){
+      directCandidates[0].click();
+      return true;
+    }
+    const detailsHeading=[...document.querySelectorAll("body *")].find(element=>{
+      if(element.children.length)return false;
+      return (element.textContent||"").trim().toLowerCase()==="details";
+    });
+    if(!detailsHeading)return false;
+    const detailsRect=detailsHeading.getBoundingClientRect();
+    const candidates=[
+      ...document.querySelectorAll("button, a, [role='button']"),
+    ].filter(element=>{
+      const rect=element.getBoundingClientRect();
+      if(!rect.width||!rect.height)return false;
+      if(rect.top<55||rect.top>190)return false;
+      if(rect.left<detailsRect.left)return false;
+      if(rect.width>80||rect.height>80)return false;
+      return true;
     });
     if(!candidates.length)return false;
     candidates.sort((a,b)=>b.getBoundingClientRect().left-a.getBoundingClientRect().left);
-    candidates[0].click();return true;
-  }
-
-  function hideDetailsPaneFallback(root){
-    /* Interact versions without an accessible pane-toggle label may not expose
-       a clickable close control. Hide only the independently identified
-       right-hand Details section, never the document/article or our app. */
-    const headings=[...document.querySelectorAll('body *')].filter(el=>
-      el.children.length===0&&['details','keywords & topics','interact recommends']
-        .includes((el.textContent||'').trim().toLowerCase())
-    );
-    const heading=headings.find(el=>(el.textContent||'').trim().toLowerCase()==='details');
-    const keyword=headings.find(el=>(el.textContent||'').trim().toLowerCase()==='keywords & topics');
-    if(!heading||!keyword)return false;
-    let pane=keyword.parentElement;
-    while(pane&&pane!==document.body&&pane!==document.documentElement){
-      if(pane.contains(heading))break;
-      pane=pane.parentElement;
-    }
-    if(!pane||pane===document.body||pane===document.documentElement||pane.contains(root))return false;
-    const bounds=pane.getBoundingClientRect();
-    if(bounds.width<140||bounds.width>480||bounds.height<80)return false;
-    pane.style.setProperty('display','none','important');
+    candidates[0].click();
     return true;
   }
 
@@ -206,24 +197,19 @@ SCRIPT = """
       root.style.setProperty('margin-left',centeredLeft-naturalLeft+'px','important');
     };
     applyWidth();
+    /* Same 20 attempts, 250ms retry, and post-close 450ms resize as PDPC. */
     let attempts=0;
-    const tryClose=()=>{
-      attempts++;
+    const tryCloseDetails=()=>{
+      attempts+=1;
       if(closePageDetailsPane()){
-        window.setTimeout(()=>{
-          const details=[...document.querySelectorAll('body *')].find(el=>
-            el.children.length===0&&(el.textContent||'').trim().toLowerCase()==='details' &&
-            el.getBoundingClientRect().width>0
-          );
-          if(details)hideDetailsPaneFallback(root);
-          applyWidth();
-        },450);
+        window.setTimeout(applyWidth,450);
         return;
       }
-      if(attempts<20){window.setTimeout(tryClose,250);return;}
-      if(hideDetailsPaneFallback(root))window.requestAnimationFrame(applyWidth);
+      if(attempts<20){
+        window.setTimeout(tryCloseDetails,250);
+      }
     };
-    tryClose();
+    tryCloseDetails();
     window.addEventListener('resize',()=>window.requestAnimationFrame(applyWidth));
     hideNativePreviewMessage(root);
     /* The native Interact preview banner may be inserted after the HTML script executes. */
