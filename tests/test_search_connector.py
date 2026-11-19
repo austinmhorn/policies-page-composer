@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from policies_composer.models import Policy
 from policies_composer.search_connector import (
     API_PATH, CONNECTOR_APP_ID, TEST_EMAIL, TEST_IDENTITY, TEST_USER_GID,
-    USER_API_PATH, document_for_policy, upload_one, user_record_for_test, sync_test_user,
+    USER_API_PATH, document_for_policy, upload_one, user_record_for_test, sync_test_user, get_document_state,
 )
 from scripts.sync_test_identity import main as user_sync_main
 from scripts.search_connector_test import main
@@ -44,6 +44,29 @@ class ConnectorTests(unittest.TestCase):
                 title=self.policy.title, number=self.policy.number,
                 manual=self.policy.manual, deep_link=self.policy.deep_link,
             ), external_identity="test")
+
+    def test_minimal_document_omits_optional_taxonomy(self):
+        doc = document_for_policy(self.policy, external_identity=TEST_IDENTITY)
+        self.assertNotIn("Taxonomy", doc)
+        self.assertEqual(doc["DeletionMode"], "Explicit")
+        self.assertFalse(doc["IsPublic"])
+
+    def test_read_only_state_checks_doc_exists_without_write(self):
+        response = Mock()
+        response.json.return_value = {"DocExists": False, "DateLastUpdated": None}
+        with patch.dict(os.environ, {
+            "POLICIES_SEARCH_SECRET_KEY": "private",
+            "INTERACT_TENANT_GUID": "tenant",
+            "INTERACT_API_DOMAIN": "https://interact.example.test",
+        }), patch("policies_composer.search_connector.requests.get",
+                 return_value=response) as get, \
+             patch("policies_composer.search_connector.requests.put") as put:
+            result = get_document_state("birchstone-policy:notion-test-123")
+        self.assertFalse(result["doc_exists"])
+        self.assertEqual(get.call_args.kwargs["params"], {
+            "docId": "birchstone-policy:notion-test-123"
+        })
+        put.assert_not_called()
 
     def test_upload_calls_exact_endpoint_with_connector_secret(self):
         doc = document_for_policy(self.policy, external_identity="test-identity")
