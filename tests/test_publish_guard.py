@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from policies_composer.publish_guard import verified_artifact, build_update_payload
+from policies_composer.models import Policy
+from policies_composer.render import render_directory
 from scripts.publish_policies import main
 
 
@@ -45,6 +47,32 @@ class PublishGuardTests(unittest.TestCase):
         html, count, _ = verified_artifact(self.out)
         self.assertEqual(html, self.html)
         self.assertEqual(count, 415)
+
+    def test_actual_renderer_script_does_not_trigger_false_duplicate_root(self):
+        policy = Policy(
+            title="Emergency Procedure",
+            number="5070",
+            manual="Emergency Procedures",
+            deep_link="https://performancehq.gracehill.com/auth/policy_deep_link_redirect?manual_id=9662&policy_id=540867&subdomain=birchstone",
+            keywords=(),
+        )
+        self.html = render_directory([policy] * 415)
+        self.manifest["sha256"] = hashlib.sha256(self.html.encode()).hexdigest()
+        self.write()
+        rendered, count, _ = verified_artifact(self.out)
+        self.assertEqual(rendered, self.html)
+        self.assertEqual(count, 415)
+
+    def test_actual_duplicate_html_roots_rejected(self):
+        self.html = self.html.replace(
+            '<div data-policies-page="true">',
+            '<div data-policies-page="true"><div data-policies-page="true">',
+            1,
+        )
+        self.manifest["sha256"] = hashlib.sha256(self.html.encode()).hexdigest()
+        self.write()
+        with self.assertRaisesRegex(RuntimeError, "one isolated root"):
+            verified_artifact(self.out)
 
     def test_rejects_fixture(self):
         self.manifest["source"] = "fixture"
