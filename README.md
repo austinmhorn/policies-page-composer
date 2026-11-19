@@ -192,17 +192,35 @@ The default test selects Emergency Eyewash / 5067 from the validated
 415-record Go snapshot. It emits a preview of the target URL, stable ID, and
 proposed permissions, but performs **no upload**.
 
-**Security gate:** Connector search records are not protected by the
-admin-only permissions of Interact page 2194. Before any write, confirm that
-the intended Interact test user has the specific external identity and verify
-how this tenant maps the identity. The script refuses writes without an
-explicit identity and matching connector confirmation.
+**Security gate:** Connector search records do not inherit Interact page
+2194's permissions. Interact matches an existing user by email through
+`PUT /api/search/connector/2/users/addupdate`, so we first associate the
+confirmed account `austinhorn@birchstoneres.com` with the connector-local
+identity `birchstone-policies-test`.
+
+Preview, without contacting Interact:
+
+```bash
+python scripts/sync_test_identity.py
+```
+
+After reviewing the preview, explicitly synchronize this **one** existing user:
+
+```bash
+python scripts/sync_test_identity.py --write --confirm-connector 2 \\
+  --confirm-email austinhorn@birchstoneres.com
+```
+
+The API must return this user record in `Added` or `Updated` (not `NotFound`)
+before the document test. No user provisioning, bulk user sync, or deletion
+sessions are performed. The `GloballyUniqueId` and `DeletionMode: Explicit`
+allow safe future changes without session cleanup.
 
 Only after that validation, one authorized record may be tested using:
 
 ```bash
 python scripts/search_connector_test.py \\
-  --external-identity CONFIRMED_IDENTITY \\
+  --external-identity birchstone-policies-test \\
   --write --confirm-connector 2
 ```
 
