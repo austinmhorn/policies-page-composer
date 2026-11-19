@@ -1,0 +1,15 @@
+{
+  "results": [
+    {
+      "id": "sample-page-1",
+      "archived": false,
+      "properties": {
+        "Name": {"type": "title", "title": [{"plain_text": "Customer Relations"}]},
+        "Number": {"type": "rich_text", "rich_text": [{"plain_text": "100"}]},
+        "Manual": {"type": "select", "select": {"name": "Leasing & Marketing"}},
+        "Deep Link": {"type": "url", "url": "https://performancehq.gracehill.com/auth/policy_deep_link_redirect?manual_id=9663&policy_id=540939&subdomain=birchstone"},
+        "Keywords": {"type": "multi_select", "multi_select": [{"name": "customer service"}]}
+      }
+    }
+  ]
+}
