@@ -3,6 +3,8 @@
 No bulk indexing, no sync sessions, and no user provisioning.
 """
 import os
+import json
+import re
 from urllib.parse import urlparse
 
 import requests
@@ -74,6 +76,40 @@ def _connector_settings() -> tuple[str, dict]:
     }
 
 
+def _safe_error_diagnostic(response) -> dict:
+    """Expose diagnostic shape without echoing tokens, URLs or policy data."""
+    details = {
+        "http_status": response.status_code,
+        "content_type": (response.headers.get("Content-Type") or "").split(";")[0][:80],
+        "body_bytes": len(response.content),
+    }
+    # Correlation IDs are useful when escalating to Interact support.
+    for name in ("X-Request-ID", "X-Correlation-ID", "Traceparent"):
+        val = response.headers.get(name)
+        if val and re.fullmatch(r"[A-Za-z0-9._:/-]{1,120}", val):
+            details[name.lower()] = val
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        details["response_format"] = "non-json"
+        return details
+    if not isinstance(payload, dict):
+        details["response_format"] = type(payload).__name__
+        return details
+    details["response_keys"] = sorted(str(key)[:60] for key in payload.keys())[:20]
+    if isinstance(payload.get("Errors"), list):
+        details["error_count"] = len(payload["Errors"])
+        codes = []
+        for item in payload["Errors"][:5]:
+            if isinstance(item, dict):
+                for error in item.get("Errors", []):
+                    if isinstance(error, dict) and isinstance(error.get("ErrorCode"), int):
+                        codes.append(error["ErrorCode"])
+        details["error_codes"] = codes
+    # Never print free-form server messages: they may echo auth or source data.
+    return details
+
+
 def _send_connector_update(path: str, records: list[dict]) -> dict:
     domain, headers = _connector_settings()
     if len(records) != 1:
@@ -86,7 +122,8 @@ def _send_connector_update(path: str, records: list[dict]) -> dict:
         result = response.json()
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
-        raise RuntimeError(f"Search connector returned HTTP {status}") from None
+        diagnostic = _safe_error_diagnostic(exc.response) if exc.response is not None else {"http_status": status}
+        raise RuntimeError("Search connector HTTP error diagnostic: " + json.dumps(diagnostic, sort_keys=True)) from None
     except requests.RequestException:
         raise RuntimeError("Search connector request failed") from None
     except ValueError:
