@@ -32,14 +32,34 @@ STYLE = """
 .policies-page .policies-input:focus,.policies-page .policies-select:focus{outline:none;border-color:var(--policies-accent);box-shadow:0 0 0 4px rgba(31,95,91,.12)}
 .policies-page .policies-count{color:var(--policies-muted);font-size:.82rem;font-weight:600;margin-bottom:12px}
 .policies-page .policies-list{border:1px solid var(--policies-edge);background:var(--policies-surface);border-radius:14px;overflow:hidden;box-shadow:0 8px 26px rgba(28,42,53,.04)}
-.policies-page .policies-record{padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:22px;border-bottom:1px solid var(--policies-edge);transition:background 150ms ease}
-.policies-page .policies-record:hover{background:var(--policies-soft)}
+.policies-page .policies-record{
+ padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:22px;
+ border-bottom:1px solid var(--policies-edge);color:inherit;text-decoration:none;cursor:pointer;
+ position:relative;transition:background-color 180ms ease,transform 180ms ease,box-shadow 180ms ease;
+}
+.policies-page .policies-record:hover{
+ transform:translateX(3px);background:var(--policies-soft);
+ box-shadow:inset 3px 0 0 var(--policies-accent);text-decoration:none;
+}
+.policies-page .policies-record:focus-visible{
+ outline:3px solid var(--policies-accent);outline-offset:-3px;box-shadow:inset 3px 0 0 var(--policies-accent);
+}
 .policies-page .policies-record:last-child{border-bottom:0}
+.policies-page .policies-record-main{min-width:0}
 .policies-page .policies-name{font-weight:750;margin-bottom:7px}
 .policies-page .policies-meta{font-size:.78rem;color:var(--policies-muted);display:flex;gap:8px;flex-wrap:wrap}
-.policies-page .policies-record a{color:var(--policies-accent-strong);font-size:.82rem;font-weight:750;white-space:nowrap;text-decoration:none}
-.policies-page .policies-record a:hover{color:var(--policies-accent);text-decoration:underline}
-.policies-page .policies-record a:focus-visible{outline:3px solid #72a9a4;outline-offset:4px}
+.policies-page .policies-row-arrow{
+ flex:0 0 auto;color:var(--policies-accent-strong);font-size:1.1rem;font-weight:800;
+ transition:transform 180ms ease,color 180ms ease;line-height:1;
+}
+.policies-page .policies-record:hover .policies-row-arrow,
+.policies-page .policies-record:focus-visible .policies-row-arrow{
+ transform:translate(2px,-2px);color:#fff;
+}
+@media(prefers-reduced-motion:reduce){
+ .policies-page .policies-record,.policies-page .policies-row-arrow{transition:none!important}
+ .policies-page .policies-record:hover,.policies-page .policies-record:hover .policies-row-arrow{transform:none}
+}
 .policies-page .policies-hidden{display:none!important}
 .policies-page .policies-empty{padding:26px;color:var(--policies-muted)}
 
@@ -77,9 +97,8 @@ STYLE = """
 .policies-page .policies-record:hover{background:rgba(44,177,204,.1)}
 .policies-page .policies-name{color:#fff}
 .policies-page .policies-meta,.policies-page .policies-count,.policies-page .policies-empty{color:var(--policies-muted)}
-.policies-page .policies-record a{color:var(--policies-accent-strong)}
-.policies-page .policies-record a:hover{color:#fff}
-.policies-page .policies-record a:focus-visible{outline-color:var(--policies-accent)}
+.policies-page a.policies-record:link,.policies-page a.policies-record:visited{color:#fff;text-decoration:none}
+.policies-page a.policies-record:hover,.policies-page a.policies-record:focus-visible{color:#fff;text-decoration:none}
 
 @media(max-width:640px){
  .policies-page{width:min(calc(100% - 20px),var(--policies-max-width));margin:10px 0 30px;padding:20px 14px;border-radius:14px}
@@ -262,16 +281,17 @@ def render_directory(policies):
     for p in policies:
         search_text = " ".join([p.title, p.number, p.manual, *p.keywords]).casefold()
         cards.append(
-            '<article class="policies-record" data-policy-record="true" data-manual="' +
+            '<a class="policies-record" data-policy-record="true" data-manual="' +
             escape(p.manual, quote=True) + '" data-search="' +
-            escape(search_text, quote=True) + '">' +
+            escape(search_text, quote=True) + '" href="' +
+            escape(p.deep_link, quote=True) +
+            '" target="_blank" rel="noopener noreferrer" aria-label="Open ' +
+            escape(p.title, quote=True) + ' in Grace Hill (new tab)">' +
             '<div class="policies-record-main"><div class="policies-name">' +
             escape(p.title) + '</div><div class="policies-meta"><span>' +
             escape(p.number) + '</span><span>·</span><span>' +
-            escape(p.manual) + '</span></div></div><a href="' +
-            escape(p.deep_link, quote=True) +
-            '" target="_blank" rel="noopener noreferrer" aria-label="Open ' +
-            escape(p.title, quote=True) + ' in Grace Hill">Open policy ↗</a></article>'
+            escape(p.manual) + '</span></div></div>' +
+            '<span class="policies-row-arrow" aria-hidden="true">↗</span></a>'
         )
     return (
         '<div class="policies-page" data-policies-page="true">'
