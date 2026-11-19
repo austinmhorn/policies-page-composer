@@ -124,6 +124,25 @@ class ConnectorTests(unittest.TestCase):
         self.assertNotIn("API_SECRET", str(diagnostic))
         self.assertNotIn("DO_NOT_SHARE", str(diagnostic))
 
+    def test_http_500_error_messages_are_redacted(self):
+        response = Mock()
+        response.status_code = 500
+        response.headers = {"Content-Type": "application/json"}
+        response.content = b"message"
+        response.json.return_value = {
+            "HasErrors": True,
+            "ErrorMessages": [
+                "Invalid document field for austinhorn@birchstoneres.com",
+                "Inspect https://example.org/policy?token=test",
+                "ApiKey: EXAMPLE_KEY",
+            ],
+        }
+        diagnostic = _safe_error_diagnostic(response)
+        self.assertEqual(len(diagnostic["error_messages"]), 3)
+        self.assertIn("[EMAIL]", diagnostic["error_messages"][0])
+        self.assertIn("[URL]", diagnostic["error_messages"][1])
+        self.assertNotIn("EXAMPLE_KEY", str(diagnostic))
+
     def test_user_record_is_allowlisted_and_explicit(self):
         record = user_record_for_test()
         self.assertEqual(record["Email"], TEST_EMAIL)
