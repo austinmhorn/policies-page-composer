@@ -54,6 +54,38 @@ class RenderSafetyTests(unittest.TestCase):
         self.assertNotIn("btnPrint", fragment)
         self.assertNotIn("body_btnPDF", fragment)
 
+    def test_entire_policy_row_is_a_keyboard_accessible_link(self):
+        from html.parser import HTMLParser
+
+        class RowLinks(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.links = []
+
+            def handle_starttag(self, tag, attrs):
+                attributes = dict(attrs)
+                if tag == "a" and attributes.get("data-policy-record") == "true":
+                    self.links.append(attributes)
+
+        fragment = render_directory(self.policies)
+        parser = RowLinks()
+        parser.feed(fragment)
+        self.assertEqual(len(parser.links), 1)
+        row = parser.links[0]
+        self.assertEqual(row["target"], "_blank")
+        self.assertEqual(row["rel"], "noopener noreferrer")
+        self.assertTrue(row["href"].startswith("https://performancehq.gracehill.com/"))
+        self.assertIn("new tab", row["aria-label"])
+        self.assertNotIn("Open policy ↗", fragment)
+        self.assertIn('class="policies-row-arrow" aria-hidden="true"', fragment)
+
+    def test_row_hover_keyboard_and_reduced_motion_cues(self):
+        fragment = render_directory(self.policies)
+        self.assertIn("cursor:pointer", fragment)
+        self.assertIn("transform:translateX(3px)", fragment)
+        self.assertIn(".policies-record:focus-visible", fragment)
+        self.assertIn("prefers-reduced-motion:reduce", fragment)
+
     def test_empty_directory_refused(self):
         with self.assertRaises(ValueError):
             render_directory([])
