@@ -86,13 +86,13 @@ def _sanitize_interact_message(message) -> str:
         secret = os.environ.get(name, "")
         if secret and len(secret) >= 4:
             value = value.replace(secret, "[REDACTED]")
-    value = re.sub(r"https?://\\S+", "[URL]", value, flags=re.I)
-    value = re.sub(r"\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+    value = re.sub(r"https?://\S+", "[URL]", value, flags=re.I)
+    value = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
                    "[EMAIL]", value)
-    value = re.sub(r"\\b[0-9a-f]{8}-[0-9a-f-]{27,}\\b",
+    value = re.sub(r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b",
                    "[ID]", value, flags=re.I)
-    value = re.sub(r"(?i)(api[_-]?key|secret|token|password)\\s*[:=]\\s*\\S+",
-                   r"\\1=[REDACTED]", value)
+    value = re.sub(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*\S+",
+                   r"\1=[REDACTED]", value)
     return value[:350]
 
 
