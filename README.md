@@ -26,16 +26,12 @@ The original PDE `notionapi/notionapi.go` was used as a design reference (pagina
 
 ## Setup
 
-Go 1.23+ and Python 3.10+ are required. No external Go or Python dependencies.
+Go 1.23+ and Python 3.10+ are required. Install Python dependencies with `python -m pip install -r requirements.txt` (or use the existing shared engines venv, which contains `requests` and `python-dotenv`).
 
-Give the Notion integration read access to DB.Policies. Set `NOTION_TOKEN` and **exactly one** of `NOTION_DATA_SOURCE_ID` (current Notion API) or `NOTION_DATABASE_ID` (legacy API).
+Give the Notion integration read access to DB.Policies. Store `NOTION_TOKEN` and **exactly one** of `NOTION_DATA_SOURCE_ID` (current Notion API) or `NOTION_DATABASE_ID` (legacy API) in `secrets/.env`. The Interact and render scripts automatically load this file using `python-dotenv` with `override=True`, so special characters in credentials are preserved even if a shell was previously sourced incorrectly.
 
 ```bash
-export NOTION_TOKEN='...'
-export NOTION_DATA_SOURCE_ID='...'
-unset NOTION_DATABASE_ID
-export POLICIES_MIN_COUNT=371 # set to the verified active policy count/safety floor
-python3 scripts/render_workflow.py --minimum-count "$POLICIES_MIN_COUNT"
+python3 scripts/render_workflow.py --minimum-count 371
 ```
 
 The Go fetcher uses Notion API version 2025-09-03 for data sources and 2022-06-28 for legacy database queries. It retrieves all pages with cursor pagination and produces a `data/policies.json` snapshot. The Python layer validates and renders that snapshot. Keep tokens in a protected environment, never in the repository.
@@ -121,9 +117,7 @@ without creating or modifying a page:
 
 ```bash
 cd ~/policies-page-composer
-# Run with the shared Python venv. Load credentials using python-dotenv's
-# dotenv_values() or load_dotenv(..., override=True), NOT `source`:
-python3 scripts/verify_interact_page.py
+/home/birchstonereporting/shared-venvs/data-engines/bin/python scripts/verify_interact_page.py
 ```
 
 This script reads `config/interact_target.json`, authenticates, and performs
@@ -132,10 +126,7 @@ title, content type, and Block Editor flag match the expected Policies-only
 destination. If the API omits an identifying field, verification fails closed
 until we inspect the tenant's actual metadata format.
 
-**Credential caution:** Shell sourcing the existing unquoted
-`Property-Details-Page-Composer/secrets/.env` can alter the API secret. Use
-`python-dotenv` to load the five Interact credentials from that file, with
-`override=True`, from the same Python process that runs the script.
+**Credential caution:** Do not `source` the `.env` file: shell interpretation can alter special characters in the API secret. The scripts load `policies-page-composer/secrets/.env` directly via `python-dotenv`, overriding stale exported values. The file is gitignored; keep its permissions at `0600`. The Notion database/data-source ID remains to be configured for DB.Policies.
 
 ## Fragment vs preview
 

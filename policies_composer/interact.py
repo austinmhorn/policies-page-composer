@@ -10,6 +10,8 @@ from typing import Any
 
 import requests
 
+from .config import load_project_env
+
 
 class InteractError(RuntimeError):
     """Operational error that does not echo credentials or response bodies."""
@@ -77,6 +79,7 @@ def page_payload(*, title: str, summary: str, html: str,
 
 class InteractClient:
     def __init__(self) -> None:
+        load_project_env()
         self.api_domain = required_env("INTERACT_API_DOMAIN").rstrip("/")
         if not self.api_domain.startswith("https://"):
             raise InteractError("INTERACT_API_DOMAIN must use HTTPS.")

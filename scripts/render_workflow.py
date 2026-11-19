@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from policies_composer.config import load_project_env
 from policies_composer.models import Policy
 from policies_composer.transform import normalize_page
 from policies_composer.render import render_directory, render_preview_document
@@ -42,6 +43,7 @@ def load_policies(path: Path):
 
 
 def main():
+    load_project_env()
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--fixture", type=Path, help="Test fixture containing raw Notion pages; skips Go")
