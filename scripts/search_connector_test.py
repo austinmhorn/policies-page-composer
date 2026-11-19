@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from policies_composer.config import load_project_env
-from policies_composer.search_connector import document_for_policy, upload_one
+from policies_composer.search_connector import TEST_IDENTITY, document_for_policy, upload_one
 from policies_composer.validate import validate_policies
 from scripts.render_workflow import load_policies
 
@@ -25,8 +25,8 @@ def main(argv=None):
     parser.add_argument("--confirm-connector", type=int)
     args = parser.parse_args(argv)
 
-    if args.write and (args.confirm_connector != 2 or not args.external_identity):
-        parser.error("--write requires --confirm-connector 2 and --external-identity")
+    if args.write and (args.confirm_connector != 2 or args.external_identity != TEST_IDENTITY):
+        parser.error("--write requires --confirm-connector 2 and --external-identity " + TEST_IDENTITY)
     if args.confirm_connector is not None and not args.write:
         parser.error("--confirm-connector requires --write")
 
