@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-11-19T00:00:00Z",
+  "source": "notion",
+  "policies": [
+    {
+      "title": "Customer Relations",
+      "number": "100",
+      "manual": "Leasing & Marketing",
+      "deep_link": "https://performancehq.gracehill.com/auth/policy_deep_link_redirect?manual_id=9663&policy_id=540939&subdomain=birchstone",
+      "keywords": ["customer service"],
+      "notion_page_id": "sample-page-1"
+    }
+  ]
+}

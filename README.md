@@ -1,55 +1,78 @@
 # Policies Page Composer
 
-Read-only foundation for the Birchstone **DB.Policies → searchable Interact policy directory** workflow. This project is independent of Property Details Page Composer.
+Standalone **DB.Policies → searchable Interact policy directory** project, designed to mirror the Property Details Composer workflow without changing the production Property Data Engine.
 
-**Current status:** render and preview only. No Interact publishing, Portal task registration, or scheduling is enabled.
+**Current stage: render/preview only.** No Interact publishing, Portal task registration, or automation is enabled.
 
-## Supported Notion properties
+## Architecture
 
-- `Name` — title
-- `Number` — rich text or number (preserved as text, e.g. `1.10 Entrata`)
-- `Deep Link` — Grace Hill redirect URL
-- `Manual` — select or multi-select
-- `Keywords` — multi-select or comma-separated rich text
-
-## Local validation and preview
-
-Python 3.10+; standard library only.
-
-```bash
-python3 -m unittest discover -s tests -v
-python3 scripts/render_workflow.py --fixture examples/notion_fixture.json --minimum-count 1
+```text
+Notion DB.Policies
+    ↓
+Go: cmd/policies-fetch
+    ├── internal/notionapi/     (stateless pagination + auth)
+    └── internal/policies/      (type-aware policy normalization)
+    ↓
+data/policies.json             (gitignored normalized snapshot)
+    ↓
+Python: scripts/render_workflow.py
+    ├── validate required fields, links, duplicates and minimum count
+    ├── output/policies.preview.html
+    ├── output/policies.fragment.html
+    └── output/render_manifest.json
 ```
 
-Open `output/policies.preview.html` to view the generated directory.
+The original PDE `notionapi/notionapi.go` was used as a design reference (pagination and Notion property extraction). This project's client is independent and has **no dependency on PDE's config.json, API response file, token globals, or execution**. No shared Go module or PDE code change has been made yet. Once validated, a separate shared-client refactor can be considered.
 
-## Live Notion data (read-only)
+## Setup
 
-Grant your Notion integration access to DB.Policies. Set `NOTION_TOKEN` and **either** `NOTION_DATA_SOURCE_ID` (new API) **or** `NOTION_DATABASE_ID` (legacy API). Never commit credentials.
+Go 1.23+ and Python 3.10+ are required. No external Go or Python dependencies.
+
+Give the Notion integration read access to DB.Policies. Set `NOTION_TOKEN` and **exactly one** of `NOTION_DATA_SOURCE_ID` (current Notion API) or `NOTION_DATABASE_ID` (legacy API).
 
 ```bash
 export NOTION_TOKEN='...'
 export NOTION_DATA_SOURCE_ID='...'
-export POLICIES_MIN_COUNT=371
+unset NOTION_DATABASE_ID
+export POLICIES_MIN_COUNT=371 # set to the verified active policy count/safety floor
 python3 scripts/render_workflow.py --minimum-count "$POLICIES_MIN_COUNT"
 ```
 
-Review the actual record count and Notion property types before enabling a live workflow. The minimum count is a safety floor, not an exact target; it must be selected based on the active database. Invalid entries, duplicate links, and duplicate manual/number pairs cause validation to fail before saved output is replaced.
+The Go fetcher uses Notion API version 2025-09-03 for data sources and 2022-06-28 for legacy database queries. It retrieves all pages with cursor pagination and produces a `data/policies.json` snapshot. The Python layer validates and renders that snapshot. Keep tokens in a protected environment, never in the repository.
 
-## Artifacts (gitignored)
+Alternatively fetch without rendering:
 
-- `output/policies.preview.html` — standalone preview
-- `output/policies.fragment.html` — saved validated HTML reserved for future publishing
-- `output/render_manifest.json` — policy count, UTC timestamp, content SHA-256 and source; `publish_authorized=false`
+```bash
+go run ./cmd/policies-fetch --output data/policies.json
+python3 scripts/render_workflow.py --policies-json data/policies.json --minimum-count 371
+```
 
-The current HTML contains embedded styles and filter JavaScript for local preview. Before publishing to Interact, generate a compatible fragment and move UI assets into `birchstone-interact-customization/policies/`.
+## Test (offline)
 
-## Next implementation phases
+```bash
+go test ./...
+python3 -m unittest discover -s tests -v
+python3 scripts/render_workflow.py --fixture examples/notion_fixture.json --minimum-count 1
+```
 
-1. Verify the live Notion schema, permissions and full policy count.
-2. Create Interact-compatible HTML/CSS/JS assets with an isolated preview.
-3. Add guarded publisher with destination allowlist and manifest verification.
-4. Register Render, View Render, Publish and Render & Publish in Birchstone Portal.
-5. Add render-only scheduling; require separate authorization for unattended publication.
+## DB.Policies schema
 
-**Do not use the Property Details Interact page (2186) as the destination for this project.**
+| Property | Expected Notion type | Use |
+|---|---|---|
+| Name | title | Policy name |
+| Number | rich_text or number | Identifier preserved as text (e.g. `1.10 Entrata`) |
+| Manual | select or multi_select | Directory grouping |
+| Deep Link | url | Grace Hill redirect link |
+| Keywords | multi_select or rich_text | Optional search terms |
+
+Deep links are validated against `https://performancehq.gracehill.com/auth/policy_deep_link_redirect`, including nonempty `manual_id`, `policy_id`, and the `birchstone` subdomain.
+
+Generated snapshots, previews and credentials are gitignored. Do not commit live Notion data or tokens.
+
+## Safety and follow-up phases
+
+- Current output is a **standalone local preview** containing embedded CSS/JS. Before Interact publishing, move assets into `birchstone-interact-customization/policies/` and generate an Interact-compatible fragment.
+- A publishing entrypoint does not exist yet. Any new publisher must require an explicitly allowlisted destination (never Property Details page 2186), validate the saved manifest/content hash and refuse stale or unexpected snapshots.
+- Register Portal render/preview/publish actions only after a verified live Notion fetch and Interact staging test.
+- Scheduled rendering should be enabled separately from unattended publishing.
+- When a shared Go notion client is justified, migrate PDE under its own tests and change-control process; do not modify the existing PDE in this project.
