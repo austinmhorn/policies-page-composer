@@ -29,10 +29,8 @@ def document_for_policy(policy: Policy, *, external_identity: str) -> dict:
         "Url": policy.deep_link,
         "Summary": f"Birchstone policy {policy.number} · {policy.manual}. Opens in Grace Hill.",
         "Keywords": " ".join((policy.number, policy.manual, *policy.keywords)),
-        "Taxonomy": [
-            {"Name": "Manual", "Type": "Text", "TextValue": policy.manual},
-            {"Name": "Policy Number", "Type": "Text", "TextValue": policy.number},
-        ],
+        # Keep initial indexing minimal. Taxonomy can be introduced only after
+        # Interact accepts a one-document baseline without HTTP 500.
         "IsPublic": False,
         "ExternalIdentities": [identity],
         "DeletionMode": "Explicit",
@@ -113,6 +111,33 @@ def sync_test_user(record: dict) -> dict:
         raise RuntimeError("Connector did not confirm the matched test user")
     return {"acknowledged": True, "test_user_matched": True,
             "identity": TEST_IDENTITY, "app_id": CONNECTOR_APP_ID}
+
+
+def get_document_state(globally_unique_id: str) -> dict:
+    """Read-only check after a failed write; avoids blind duplicate retries."""
+    if not globally_unique_id.startswith("birchstone-policy:"):
+        raise ValueError("Document state lookup only accepts policy IDs")
+    domain, headers = _connector_settings()
+    try:
+        response = requests.get(
+            domain + "/api/search/connector/2/docs/state",
+            params={"docId": globally_unique_id},
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        state = response.json()
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        raise RuntimeError(f"Document state lookup returned HTTP {status}") from None
+    except requests.RequestException:
+        raise RuntimeError("Document state lookup failed to connect") from None
+    except ValueError:
+        raise RuntimeError("Document state lookup returned invalid JSON") from None
+    if not isinstance(state, dict) or not isinstance(state.get("DocExists"), bool):
+        raise RuntimeError("Document state response lacks a valid DocExists value")
+    return {"doc_exists": state["DocExists"], "app_id": CONNECTOR_APP_ID,
+            "globally_unique_id": globally_unique_id}
 
 
 def upload_one(document: dict) -> dict:
