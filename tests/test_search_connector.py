@@ -7,8 +7,10 @@ from unittest.mock import Mock, patch
 
 from policies_composer.models import Policy
 from policies_composer.search_connector import (
-    API_PATH, CONNECTOR_APP_ID, document_for_policy, upload_one,
+    API_PATH, CONNECTOR_APP_ID, TEST_EMAIL, TEST_IDENTITY, TEST_USER_GID,
+    USER_API_PATH, document_for_policy, upload_one, user_record_for_test, sync_test_user,
 )
+from scripts.sync_test_identity import main as user_sync_main
 from scripts.search_connector_test import main
 
 
@@ -77,6 +79,56 @@ class ConnectorTests(unittest.TestCase):
         }), patch("policies_composer.search_connector.requests.put", return_value=response):
             with self.assertRaisesRegex(RuntimeError, "did not acknowledge"):
                 upload_one(doc)
+
+    def test_user_record_is_allowlisted_and_explicit(self):
+        record = user_record_for_test()
+        self.assertEqual(record["Email"], TEST_EMAIL)
+        self.assertEqual(record["GloballyUniqueId"], TEST_USER_GID)
+        self.assertEqual(record["ExternalIdentities"], [TEST_IDENTITY])
+        self.assertEqual(record["DeletionMode"], "Explicit")
+        with self.assertRaises(ValueError):
+            user_record_for_test(email="different@example.com")
+
+    def test_user_sync_calls_documented_endpoint_and_checks_match(self):
+        record = user_record_for_test()
+        response = Mock()
+        response.json.return_value = {
+            "HasErrors": False, "Errors": [], "Added": [TEST_USER_GID],
+            "Updated": [], "NotFound": [],
+        }
+        with patch.dict(os.environ, {
+            "POLICIES_SEARCH_SECRET_KEY": "private",
+            "INTERACT_TENANT_GUID": "tenant",
+            "INTERACT_API_DOMAIN": "https://interact.example.test",
+        }), patch("policies_composer.search_connector.requests.put",
+                 return_value=response) as put:
+            self.assertTrue(sync_test_user(record)["acknowledged"])
+        args, kwargs = put.call_args
+        self.assertEqual(args[0], "https://interact.example.test" + USER_API_PATH)
+        self.assertEqual(kwargs["json"], [record])
+        self.assertEqual(kwargs["headers"]["X-ApiKey"], "private")
+
+    def test_user_sync_rejects_unmatched_account(self):
+        response = Mock()
+        response.json.return_value = {
+            "HasErrors": False, "Errors": [], "Added": [],
+            "Updated": [], "NotFound": [TEST_USER_GID],
+        }
+        with patch.dict(os.environ, {
+            "POLICIES_SEARCH_SECRET_KEY": "private",
+            "INTERACT_TENANT_GUID": "tenant",
+            "INTERACT_API_DOMAIN": "https://interact.example.test",
+        }), patch("policies_composer.search_connector.requests.put", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+                sync_test_user(user_record_for_test())
+
+    def test_user_identity_cli_defaults_to_dry_run(self):
+        with patch("scripts.sync_test_identity.sync_test_user") as sync, \
+             patch("builtins.print"):
+            self.assertEqual(user_sync_main([]), 0)
+            sync.assert_not_called()
+        with self.assertRaises(SystemExit):
+            user_sync_main(["--write"])
 
     def test_cli_write_requires_explicit_gate(self):
         with self.assertRaises(SystemExit):
