@@ -142,3 +142,31 @@ does **not** update page 2194 and a publish command does not yet exist.
 - Register Portal render/preview/publish actions only after a verified live Notion fetch and Interact staging test.
 - Scheduled rendering should be enabled separately from unattended publishing.
 - When a shared Go notion client is justified, migrate PDE under its own tests and change-control process; do not modify the existing PDE in this project.
+
+## Manual publishing (separate approval required)
+
+After a successful live Go extraction and render (minimum 415 policies) and
+review of `output/policies.preview.html`, verify the saved artifact and
+Interact target without updating anything:
+
+```bash
+/home/birchstonereporting/shared-venvs/data-engines/bin/python scripts/publish_policies.py
+```
+
+This dry run checks: pinned target 2194; pure HTML page metadata; live-Notion
+source; at least 415 rendered records; record-count match; intact SHA-256
+manifest; a render no older than 24 hours; and Interact page metadata required
+by the update API. A fixture render or a modified fragment cannot be published.
+
+**Only after reviewing the preview**, explicitly publish using:
+
+```bash
+/home/birchstonereporting/shared-venvs/data-engines/bin/python scripts/publish_policies.py --publish --confirm-page-id 2194
+```
+
+This sends `PUT /api/page/2194/composer`, preserving the existing page's
+metadata using the Property Details Composer update contract. Notifications
+are disabled. It does not modify Property Details page 2186 and does not
+register any Portal automation. The `publishing_enabled: false` configuration
+continues to indicate that **automatic publishing is disabled**; a manual,
+explicitly confirmed update is the only path.

@@ -180,3 +180,35 @@ class InteractClient:
         if not isinstance(result, dict):
             raise InteractError("Interact page creation returned a non-object JSON response.")
         return result
+
+    def update_html_page(self, page_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        """Update only the pinned Policies target with a separately verified payload."""
+        if page_id != 2194:
+            raise InteractError("Updates only support Policies page 2194.")
+        if payload.get("Page", {}).get("ContentType") != "html":
+            raise InteractError("Publishing requires an HTML page payload.")
+        token = self._token or self.authenticate()
+        try:
+            response = self.session.put(
+                f"{self.api_domain}/api/page/{page_id}/composer",
+                headers={
+                    "X-Tenant": self.tenant_guid,
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            result = response.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            raise InteractError(f"Interact page update returned HTTP {status}.") from None
+        except requests.RequestException:
+            raise InteractError("Interact page update request failed to connect.") from None
+        except ValueError:
+            raise InteractError("Interact page update returned invalid JSON.") from None
+        if not isinstance(result, dict):
+            raise InteractError("Interact page update returned a non-object JSON response.")
+        return result
