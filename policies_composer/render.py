@@ -190,7 +190,17 @@ SCRIPT = """
     let attempts=0;
     const tryClose=()=>{
       attempts++;
-      if(closePageDetailsPane()){window.setTimeout(applyWidth,450);return;}
+      if(closePageDetailsPane()){
+        window.setTimeout(()=>{
+          const details=[...document.querySelectorAll('body *')].find(el=>
+            el.children.length===0&&(el.textContent||'').trim().toLowerCase()==='details' &&
+            el.getBoundingClientRect().width>0
+          );
+          if(details)hideDetailsPaneFallback(root);
+          applyWidth();
+        },450);
+        return;
+      }
       if(attempts<20){window.setTimeout(tryClose,250);return;}
       if(hideDetailsPaneFallback(root))window.requestAnimationFrame(applyWidth);
     };
