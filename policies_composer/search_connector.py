@@ -76,6 +76,26 @@ def _connector_settings() -> tuple[str, dict]:
     }
 
 
+def _sanitize_interact_message(message) -> str:
+    """Redact secrets and identifying strings from Interact error messages."""
+    if not isinstance(message, str):
+        return "[non-text error message]"
+    value = message
+    for name in ("POLICIES_SEARCH_SECRET_KEY", "INTERACT_API_SECRET",
+                 "INTERACT_API_KEY", "INTERACT_TENANT_GUID", "NOTION_TOKEN"):
+        secret = os.environ.get(name, "")
+        if secret and len(secret) >= 4:
+            value = value.replace(secret, "[REDACTED]")
+    value = re.sub(r"https?://\\S+", "[URL]", value, flags=re.I)
+    value = re.sub(r"\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+                   "[EMAIL]", value)
+    value = re.sub(r"\\b[0-9a-f]{8}-[0-9a-f-]{27,}\\b",
+                   "[ID]", value, flags=re.I)
+    value = re.sub(r"(?i)(api[_-]?key|secret|token|password)\\s*[:=]\\s*\\S+",
+                   r"\\1=[REDACTED]", value)
+    return value[:350]
+
+
 def _safe_error_diagnostic(response) -> dict:
     """Expose diagnostic shape without echoing tokens, URLs or policy data."""
     details = {
@@ -106,7 +126,16 @@ def _safe_error_diagnostic(response) -> dict:
                     if isinstance(error, dict) and isinstance(error.get("ErrorCode"), int):
                         codes.append(error["ErrorCode"])
         details["error_codes"] = codes
-    # Never print free-form server messages: they may echo auth or source data.
+    # The API sometimes returns HTTP 500 with a top-level ErrorMessages
+    # list instead of the documented per-document Errors shape. Include
+    # sanitized, bounded messages; never echo raw untrusted server text.
+    messages = payload.get("ErrorMessages")
+    if isinstance(messages, list):
+        details["error_messages"] = [
+            _sanitize_interact_message(msg) for msg in messages[:4]
+        ]
+    elif isinstance(messages, str):
+        details["error_messages"] = [_sanitize_interact_message(messages)]
     return details
 
 
