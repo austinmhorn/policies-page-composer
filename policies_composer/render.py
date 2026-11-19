@@ -42,6 +42,45 @@ STYLE = """
 .policies-page .policies-record a:focus-visible{outline:3px solid #72a9a4;outline-offset:4px}
 .policies-page .policies-hidden{display:none!important}
 .policies-page .policies-empty{padding:26px;color:var(--policies-muted)}
+
+/* Dark navy/cyan presentation reused from the final Property Details overrides.
+   The existing Policies search/list hierarchy remains unchanged. */
+.policies-page{
+ --policies-bg:#0a1929;--policies-surface:#102c43;--policies-soft:rgba(255,255,255,.05);
+ --policies-ink:#ffffff;--policies-muted:#b6c7d6;
+ --policies-edge:rgba(44,177,204,.3);--policies-edge-strong:rgba(44,177,204,.4);
+ --policies-accent:#2cb1cc;--policies-accent-strong:#59d0e4;
+ --policies-accent-soft:rgba(44,177,204,.15);
+ --policies-shadow:0 16px 36px rgba(0,0,0,.18);
+ background:linear-gradient(135deg,#0a1929 0%,#1a365d 50%,#0a1929 100%);
+ color:var(--policies-ink);
+}
+.policies-page,.policies-page :is(h1,p,div,span,a,input,select,option,article){
+ font-family:'Montserrat',Arial,sans-serif;
+}
+.policies-page h1{color:var(--policies-accent);font-weight:800}
+.policies-page .policies-intro{color:rgba(255,255,255,.9)}
+.policies-page .policies-input,.policies-page .policies-select{
+ border:1px solid var(--policies-edge);border-radius:8px;
+ background:rgba(12,41,60,.85);color:#fff;color-scheme:dark;
+}
+.policies-page .policies-input::placeholder{color:#b6c7d6;opacity:.85}
+.policies-page .policies-input:focus,.policies-page .policies-select:focus{
+ border-color:var(--policies-accent);outline:2px solid rgba(44,177,204,.6);outline-offset:2px;box-shadow:none;
+}
+.policies-page .policies-list{
+ border-color:var(--policies-edge);
+ background:linear-gradient(135deg,rgba(0,63,95,.7),rgba(12,41,60,.8));
+ box-shadow:var(--policies-shadow);
+}
+.policies-page .policies-record{border-bottom-color:rgba(44,177,204,.2)}
+.policies-page .policies-record:hover{background:rgba(44,177,204,.1)}
+.policies-page .policies-name{color:#fff}
+.policies-page .policies-meta,.policies-page .policies-count,.policies-page .policies-empty{color:var(--policies-muted)}
+.policies-page .policies-record a{color:var(--policies-accent-strong)}
+.policies-page .policies-record a:hover{color:#fff}
+.policies-page .policies-record a:focus-visible{outline-color:var(--policies-accent)}
+
 @media(max-width:640px){
  .policies-page{width:min(calc(100% - 20px),var(--policies-max-width));margin:10px 0 30px;padding:20px 14px;border-radius:14px}
  .policies-page .policies-record{align-items:flex-start;flex-direction:column;gap:8px}
@@ -97,6 +136,29 @@ SCRIPT = """
     candidates[0].click();return true;
   }
 
+  function hideDetailsPaneFallback(root){
+    /* Interact versions without an accessible pane-toggle label may not expose
+       a clickable close control. Hide only the independently identified
+       right-hand Details section, never the document/article or our app. */
+    const headings=[...document.querySelectorAll('body *')].filter(el=>
+      el.children.length===0&&['details','keywords & topics','interact recommends']
+        .includes((el.textContent||'').trim().toLowerCase())
+    );
+    const heading=headings.find(el=>(el.textContent||'').trim().toLowerCase()==='details');
+    const keyword=headings.find(el=>(el.textContent||'').trim().toLowerCase()==='keywords & topics');
+    if(!heading||!keyword)return false;
+    let pane=keyword.parentElement;
+    while(pane&&pane!==document.body&&pane!==document.documentElement){
+      if(pane.contains(heading))break;
+      pane=pane.parentElement;
+    }
+    if(!pane||pane===document.body||pane===document.documentElement||pane.contains(root))return false;
+    const bounds=pane.getBoundingClientRect();
+    if(bounds.width<140||bounds.width>480||bounds.height<80)return false;
+    pane.style.setProperty('display','none','important');
+    return true;
+  }
+
   function expandPolicies(root){
     if(!isPoliciesDocumentPage())return;
     /* Identical 1440px sizing and centering algorithm to Property Details. */
@@ -129,7 +191,8 @@ SCRIPT = """
     const tryClose=()=>{
       attempts++;
       if(closePageDetailsPane()){window.setTimeout(applyWidth,450);return;}
-      if(attempts<20)window.setTimeout(tryClose,250);
+      if(attempts<20){window.setTimeout(tryClose,250);return;}
+      if(hideDetailsPaneFallback(root))window.requestAnimationFrame(applyWidth);
     };
     tryClose();
     window.addEventListener('resize',()=>window.requestAnimationFrame(applyWidth));
