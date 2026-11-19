@@ -169,6 +169,51 @@ SCRIPT = """
     return true;
   }
 
+  function findVisibleDetailsPane(root){
+    /* The Details heading is optional; Interact sometimes shows only the
+       Keywords & Topics and Interact Recommends sections. Locate their
+       narrow right-hand column rather than a toolbar button by position. */
+    const leaves=[...document.querySelectorAll('body *')].filter(el=>
+      el.children.length===0 &&
+      (el.textContent||'').trim().toLowerCase()==='keywords & topics'
+    );
+    const appRect=root.getBoundingClientRect();
+    for(const leaf of leaves){
+      if(root.contains(leaf))continue;
+      let candidate=leaf.parentElement;
+      let chosen=null;
+      for(let depth=0;candidate&&candidate!==document.body&&depth<12;depth++){
+        if(candidate.contains(root))break;
+        const rect=candidate.getBoundingClientRect();
+        if(rect.width>=140&&rect.width<=440&&rect.height>=90&&
+           rect.left>appRect.left+appRect.width*.48){
+          /* Seek the parent column that also owns other sidebar sections.
+             If found, it can be hidden as one unit. */
+          const content=(candidate.textContent||'').toLowerCase();
+          chosen=candidate;
+          if(content.includes('interact recommends') ||
+             content.includes('authored by') ||
+             content.includes('suggest keyword')) {
+            // Continue outward while still within the narrow sidebar.
+          }
+        }
+        candidate=candidate.parentElement;
+      }
+      if(chosen&&chosen.getBoundingClientRect().width>0)return chosen;
+    }
+    return null;
+  }
+
+  function hideVisibleDetailsPane(root){
+    const pane=findVisibleDetailsPane(root);
+    if(!pane)return false;
+    /* Do not hide ancestors containing the policy list or page chrome. */
+    if(pane===document.body||pane===document.documentElement||pane.contains(root))return false;
+    pane.style.setProperty('display','none','important');
+    pane.setAttribute('data-policies-hidden-details','true');
+    return true;
+  }
+
   function expandPolicies(root){
     if(!isPoliciesDocumentPage())return;
     /* Identical 1440px sizing and centering algorithm to Property Details. */
@@ -197,17 +242,27 @@ SCRIPT = """
       root.style.setProperty('margin-left',centeredLeft-naturalLeft+'px','important');
     };
     applyWidth();
-    /* Same 20 attempts, 250ms retry, and post-close 450ms resize as PDPC. */
+    /* First try Interact's native close action. Verify the result, because
+       some Interact layouts return a clickable control without closing it. */
     let attempts=0;
+    let nativeCloseAttempted=false;
     const tryCloseDetails=()=>{
       attempts+=1;
-      if(closePageDetailsPane()){
-        window.setTimeout(applyWidth,450);
-        return;
+      const pane=findVisibleDetailsPane(root);
+      if(pane){
+        if(!nativeCloseAttempted){
+          nativeCloseAttempted=closePageDetailsPane();
+          if(nativeCloseAttempted){
+            window.setTimeout(tryCloseDetails,450);
+            return;
+          }
+        }
+        if(hideVisibleDetailsPane(root)){
+          window.requestAnimationFrame(applyWidth);
+          return;
+        }
       }
-      if(attempts<20){
-        window.setTimeout(tryCloseDetails,250);
-      }
+      if(attempts<20)window.setTimeout(tryCloseDetails,250);
     };
     tryCloseDetails();
     window.addEventListener('resize',()=>window.requestAnimationFrame(applyWidth));
