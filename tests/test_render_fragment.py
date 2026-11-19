@@ -29,6 +29,27 @@ class RenderSafetyTests(unittest.TestCase):
         self.assertIn("<!doctype html>", preview)
         self.assertIn(fragment, preview)
 
+    def test_property_details_visual_contract_reused(self):
+        fragment = render_directory(self.policies)
+        self.assertIn("--policies-max-width:1440px", fragment)
+        self.assertIn("Montserrat", fragment)
+        self.assertIn("--policies-accent:#1f5f5b", fragment)
+        self.assertIn("function expandPolicies(root)", fragment)
+        self.assertIn("Math.min(1440", fragment)
+        # Preserve the existing directory, searchable list, and manual filter.
+        self.assertIn('data-policies-search', fragment)
+        self.assertIn('data-policies-manual', fragment)
+        self.assertIn('data-policy-record="true"', fragment)
+
+    def test_interact_chrome_changes_are_pinned_to_page_2194(self):
+        fragment = render_directory(self.policies)
+        self.assertIn("get('id')==='2194'", fragment)
+        self.assertIn("function hideNativePreviewMessage(root)", fragment)
+        self.assertIn("function closePageDetailsPane()", fragment)
+        self.assertIn("body_btnBEPreview", fragment)
+        self.assertNotIn("btnPrint", fragment)
+        self.assertNotIn("body_btnPDF", fragment)
+
     def test_empty_directory_refused(self):
         with self.assertRaises(ValueError):
             render_directory([])
