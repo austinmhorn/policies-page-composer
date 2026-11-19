@@ -23,7 +23,9 @@ class _PolicyMarkupCounter(HTMLParser):
         attributes = dict(attrs)
         if tag == "div" and attributes.get("data-policies-page") == "true":
             self.roots += 1
-        if tag == "article" and attributes.get("data-policy-record") == "true":
+        if tag == "a" and attributes.get("data-policy-record") == "true":
+            if not attributes.get("href") or attributes.get("target") != "_blank":
+                raise ValueError("Policy row must be a complete new-tab link")
             self.records += 1
 
 
