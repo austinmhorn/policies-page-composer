@@ -67,8 +67,13 @@ class CreatePageTests(unittest.TestCase):
             "INTERACT_API_SECRET": "secret",
             "INTERACT_PERSON_ID": "42",
         }
-        with patch.dict(os.environ, env):
-            return InteractClient()
+        # A unit test must not load real credentials from secrets/.env.
+        # The production client deliberately overrides the shell when that file exists.
+        with patch("policies_composer.interact.load_project_env") as load_env:
+            with patch.dict(os.environ, env):
+                client = InteractClient()
+        load_env.assert_called_once_with()
+        return client
 
     def test_requests_auth_matches_property_composer(self):
         client = self.make_client()
