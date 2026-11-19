@@ -2,12 +2,31 @@
 import hashlib
 import json
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 from .page_target import target_id
 
 MIN_POLICIES = 415
 MAX_RENDER_AGE_HOURS = 24
+
+
+class _PolicyMarkupCounter(HTMLParser):
+    """Count actual HTML elements, not attribute text embedded in JavaScript."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.roots = 0
+        self.records = 0
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "div" and attributes.get("data-policies-page") == "true":
+            self.roots += 1
+        if tag == "article" and attributes.get("data-policy-record") == "true":
+            self.records += 1
+
+
 
 
 def verified_artifact(output_dir: Path):
@@ -32,9 +51,12 @@ def verified_artifact(output_dir: Path):
     actual_hash = hashlib.sha256(html.encode("utf-8")).hexdigest()
     if actual_hash != manifest.get("sha256"):
         raise RuntimeError("Saved HTML hash does not match its render manifest")
-    if html.count('data-policy-record="true"') != count:
+    counter = _PolicyMarkupCounter()
+    counter.feed(html)
+    counter.close()
+    if counter.records != count:
         raise RuntimeError("Rendered policy count does not match the manifest")
-    if html.count('data-policies-page="true"') != 1:
+    if counter.roots != 1:
         raise RuntimeError("Policies fragment must contain one isolated root")
     if "<html" in html.lower() or "<!doctype" in html.lower() or "<body" in html.lower():
         raise RuntimeError("Cannot publish a standalone HTML document into Interact")
